@@ -1,0 +1,177 @@
+
+  float humidity;
+  float temperature;
+  bool fanControl;
+
+  Variables which are marked as READ/WRITE in the Cloud Thing will also have functions
+  which are called when their values are changed from the Dashboard.
+  These functions are generated with the Thing and added at the end of this sketch.
+*/
+#include <DHT_Async.h>  // Assuming you're using DHT_Async library
+
+#define DHT_SENSOR_PIN 2        // 
+#define DHT_SENSOR_TYPE DHT_TYPE_11  // 
+
+DHT_Async dht_sensor(DHT_SENSOR_PIN, DHT_SENSOR_TYPE);
+
+const long interval = 120000;
+unsigned long previousMillis = 0;
+
+#include <LiquidCrystal.h>
+LiquidCrystal lcd(6, 7, 13, 12, 11, 10);
+
+
+
+int fanControl_count = 0; 
+
+#define ENABLE 5
+#define DIRA 3
+#define DIRB 4
+
+#include "thingProperties.h"
+
+void setup() {
+  Serial.begin(9600);
+  lcd.begin(16, 2);
+
+  pinMode(ENABLE, OUTPUT);
+  pinMode (DIRA, OUTPUT);
+  pinMode (DIRB, OUTPUT);
+  pinMode (DHT_SENSOR_PIN, INPUT);
+
+  digitalWrite(DIRA,HIGH);
+  digitalWrite(DIRB,LOW);
+  digitalWrite(ENABLE,LOW);
+
+  // Defined in thingProperties.h
+  initProperties();
+
+  // Connect to Arduino IoT Cloud
+  ArduinoCloud.begin(ArduinoIoTPreferredConnection);
+  
+  /*
+     The following function allows you to obtain more information
+     related to the state of network and IoT Cloud connection and errors
+     the higher number the more granular information you’ll get.
+     The default is 0 (only errors).
+     Maximum is 4
+ */
+  setDebugMessageLevel(2);
+  ArduinoCloud.printDebugInfo();
+}
+
+static bool measure_environment( float *temperature, float *humidity ) {
+  static unsigned long measurement_timestamp = millis( );
+  
+  /* Measure once every four seconds. */
+  if( millis( ) - measurement_timestamp > 3000ul )
+  {
+    if( dht_sensor.measure( temperature, humidity ) == true )
+    {
+      measurement_timestamp = millis( );
+      return( true );
+    }
+  }
+
+  return( false );
+}
+
+
+
+void loop() {
+  ArduinoCloud.update();
+  // Your code here 
+  // put your main code here, to run repeatedly:
+   static unsigned long measurement_timestamp = millis();
+  
+ float temperature;
+  float humidity;
+
+
+// Check if 1 minute has passed (60000 ms)
+  if (measurement_timestamp - previousMillis >= interval) {
+    previousMillis = measurement_timestamp;  // Update the last check time
+    fanControl_count = 0;  // Reset the counter every minute
+    Serial.println("Minute elapsed. Counter reset.");
+  }
+
+
+  if( measure_environment( &temperature, &humidity ) == true )
+  { temperature = temperature; 
+   
+    if (temperature > 29.0) {
+      digitalWrite(ENABLE,HIGH);
+      if(! fanControl) {
+        fanControl_count ++;
+        Serial.println("High temperature - turn on fan");
+        fanControl = true;
+      }
+    } else {
+      digitalWrite(ENABLE,LOW);
+      if(fanControl) {
+        Serial.println("Low temperature - turn off fan");
+        fanControl = false;
+      }
+
+      if (fanControl_count >= 2) {
+    Serial.println("Anomaly detected; power down.");
+        lcd.print("Anomaly detected; power down.");
+    fanControl_count = 0; 
+  }
+
+    }
+    Serial.print( "T = " );
+    Serial.print( temperature, 1 );
+    Serial.print( " deg. C, H = " );
+    Serial.print( humidity, 1 );
+    Serial.println( "%" );
+ 
+  }
+  
+}
+
+
+
+/*
+  Since FanControl is READ_WRITE variable, onFanControlChange() is
+  executed every time a new value is received from IoT Cloud.
+*/
+void onFanControlChange()  {
+  // Add your code here to act upon FanControl change
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+  Since Temperature is READ_WRITE variable, onTemperatureChange() is
+  executed every time a new value is received from IoT Cloud.
+*/
+void onTemperatureChange()  {
+  // Add your code here to act upon Temperature change
+}
+
+
